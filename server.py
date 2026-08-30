@@ -82,7 +82,12 @@ Cevabını kısa ve net ver. Tarih, saat, hava durumu gibi bilgileri web aramas�
         )
         
         veri = response.json()
-        cevap = veri['choices'][0]['message']['content']
+        # ✅ CHOICES HATASINI DÜZELTEN KOD
+try:
+    cevap = veri['choices'][0]['message']['content']
+except (KeyError, IndexError, TypeError):
+    cevap = "Üzgünüm, API'den cevap gelemedi. Lütfen tekrar dener misin?"
+    print("❌ Choices hatası:", veri)
         
         return jsonify({'success': True, 'reply': cevap})
         
