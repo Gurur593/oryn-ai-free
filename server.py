@@ -6,7 +6,7 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-# ⚡ 30 API ANAHTARINI RENDER'DAN ÇEK!
+# ---- 30 API ANAHTARINI RENDER'DAN ÇEK ----
 API_ANAHTARLARI = []
 for i in range(1, 31):
     anahtar = os.environ.get(f'GROQ_API_KEY_{i}')
@@ -15,6 +15,7 @@ for i in range(1, 31):
 
 print(f"🔑 {len(API_ANAHTARLARI)} API anahtarı yüklendi.")
 
+# ---- GROQ API'YE İSTEK GÖNDER ----
 def groq_istek_yap(mesajlar, anahtar):
     try:
         response = requests.post(
@@ -28,12 +29,16 @@ def groq_istek_yap(mesajlar, anahtar):
             timeout=30
         )
         veri = response.json()
+        print(f"📩 API Yanıtı:", veri)  # HATA AYIKLAMA
         if 'choices' in veri and len(veri['choices']) > 0:
             return True, veri['choices'][0].get('message', {}).get('content', '')
-        return False, None
-    except:
+        else:
+            return False, None
+    except Exception as e:
+        print(f"❌ API Hatası: {e}")
         return False, None
 
+# ---- ANA CHAT ENDPOINT ----
 @app.route('/api/chat', methods=['POST'])
 def chat():
     try:
@@ -49,6 +54,7 @@ def chat():
         
         cevap = None
         for i, anahtar in enumerate(API_ANAHTARLARI):
+            print(f"🔄 API {i+1}/{len(API_ANAHTARLARI)} deneniyor...")
             basarili, sonuc = groq_istek_yap(groq_mesajlar, anahtar)
             if basarili and sonuc:
                 cevap = sonuc
@@ -63,12 +69,12 @@ def chat():
             return jsonify({'success': False, 'error': 'Tüm API anahtarları başarısız oldu!'}), 500
         
     except Exception as hata:
-        print("❌ Hata:", hata)
+        print(f"❌ Sunucu Hatası: {hata}")
         return jsonify({'success': False, 'error': str(hata)}), 500
 
 @app.route('/api/health')
 def saglik():
-    return jsonify({'status': 'ORYN çalışıyor! 🚀'})
+    return jsonify({'status': 'ORYN API Havuzu ile çalışıyor! 🚀'})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
