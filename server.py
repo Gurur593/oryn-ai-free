@@ -6,7 +6,33 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
+# ⚡ 30 API ANAHTARINI RENDER'DAN ÇEK!
+API_ANAHTARLARI = []
+for i in range(1, 31):
+    anahtar = os.environ.get(f'GROQ_API_KEY_{i}')
+    if anahtar:
+        API_ANAHTARLARI.append(anahtar)
+
+print(f"🔑 {len(API_ANAHTARLARI)} API anahtarı yüklendi.")
+
+def groq_istek_yap(mesajlar, anahtar):
+    try:
+        response = requests.post(
+            'https://api.groq.com/openai/v1/chat/completions',
+            headers={'Authorization': f'Bearer {anahtar}', 'Content-Type': 'application/json'},
+            json={
+                'model': 'llama-3.1-8b-instant',
+                'messages': mesajlar,
+                'max_tokens': 4096
+            },
+            timeout=30
+        )
+        veri = response.json()
+        if 'choices' in veri and len(veri['choices']) > 0:
+            return True, veri['choices'][0].get('message', {}).get('content', '')
+        return False, None
+    except:
+        return False, None
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
@@ -21,20 +47,20 @@ def chat():
         for m in mesajlar:
             groq_mesajlar.append({"role": m['role'], "content": m['text']})
         
-        response = requests.post(
-            'https://api.groq.com/openai/v1/chat/completions',
-            headers={'Authorization': f'Bearer {GROQ_API_KEY}', 'Content-Type': 'application/json'},
-            json={
-                'model': 'llama-3.1-8b-instant',
-                'messages': groq_mesajlar,
-                'max_tokens': 4096
-            }
-        )
+        cevap = None
+        for i, anahtar in enumerate(API_ANAHTARLARI):
+            basarili, sonuc = groq_istek_yap(groq_mesajlar, anahtar)
+            if basarili and sonuc:
+                cevap = sonuc
+                print(f"✅ API {i+1} başarılı!")
+                break
+            else:
+                print(f"❌ API {i+1} başarısız, sıradakine geçiliyor...")
         
-        veri = response.json()
-        cevap = veri['choices'][0]['message']['content']
-        
-        return jsonify({'success': True, 'reply': cevap})
+        if cevap:
+            return jsonify({'success': True, 'reply': cevap})
+        else:
+            return jsonify({'success': False, 'error': 'Tüm API anahtarları başarısız oldu!'}), 500
         
     except Exception as hata:
         print("❌ Hata:", hata)
