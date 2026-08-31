@@ -6,8 +6,34 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-# RENDER'DA SADECE 1 ANAHTAR KULLAN!
-GROQ_API_KEY = os.environ.get('GROQ_API_KEY')
+# ---- 12 GEMINI ANAHTARI ----
+API_ANAHTARLARI = []
+for i in range(1, 13):
+    anahtar = os.environ.get(f'GEMINI_API_KEY_{i}')
+    if anahtar:
+        API_ANAHTARLARI.append(anahtar)
+
+print(f"🔑 {len(API_ANAHTARLARI)} Gemini anahtarı yüklendi.")
+
+def gemini_istek_yap(mesaj, anahtar):
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={anahtar}"
+        payload = {
+            "contents": [{
+                "parts": [{"text": mesaj}]
+            }]
+        }
+        response = requests.post(url, json=payload, timeout=30)
+        veri = response.json()
+        
+        if 'candidates' in veri and len(veri['candidates']) > 0:
+            return True, veri['candidates'][0]['content']['parts'][0]['text']
+        else:
+            print(f"❌ Gemini Hatası: {veri}")
+            return False, None
+    except Exception as e:
+        print(f"❌ Gemini Hatası: {e}")
+        return False, None
 
 @app.route('/api/chat', methods=['POST'])
 def chat():
@@ -18,32 +44,31 @@ def chat():
         if not mesajlar:
             return jsonify({'success': False, 'error': 'Mesaj yok'}), 400
         
-        groq_mesajlar = []
-        for m in mesajlar:
-            groq_mesajlar.append({"role": m['role'], "content": m['text']})
+        son_mesaj = mesajlar[-1]['text']
         
-        response = requests.post(
-            'https://api.groq.com/openai/v1/chat/completions',
-            headers={'Authorization': f'Bearer {GROQ_API_KEY}', 'Content-Type': 'application/json'},
-            json={
-                'model': 'llama-3.1-8b-instant',
-                'messages': groq_mesajlar,
-                'max_tokens': 4096
-            }
-        )
+        cevap = None
+        for i, anahtar in enumerate(API_ANAHTARLARI):
+            print(f"🔄 Gemini {i+1}/{len(API_ANAHTARLARI)} deneniyor...")
+            basarili, sonuc = gemini_istek_yap(son_mesaj, anahtar)
+            if basarili and sonuc:
+                cevap = sonuc
+                print(f"✅ Gemini {i+1} başarılı!")
+                break
+            else:
+                print(f"❌ Gemini {i+1} başarısız, sıradakine geçiliyor...")
         
-        veri = response.json()
-        cevap = veri['choices'][0]['message']['content']
-        
-        return jsonify({'success': True, 'reply': cevap})
+        if cevap:
+            return jsonify({'success': True, 'reply': cevap})
+        else:
+            return jsonify({'success': False, 'error': 'Tüm anahtarlar başarısız oldu!'}), 500
         
     except Exception as hata:
-        print("❌ Hata:", hata)
+        print(f"❌ Sunucu Hatası: {hata}")
         return jsonify({'success': False, 'error': str(hata)}), 500
 
 @app.route('/api/health')
 def saglik():
-    return jsonify({'status': 'ORYN çalışıyor! 🚀'})
+    return jsonify({'status': 'ORYN Gemini ile çalışıyor! 🚀'})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
